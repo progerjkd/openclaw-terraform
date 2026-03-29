@@ -16,6 +16,15 @@ echo "Timestamp: $(date)"
 echo "Architecture: $(uname -m)"
 echo "================================================"
 
+# Add swap space (required for Docker build on t4g.small - 2GB RAM is not enough)
+echo "[0/10] Setting up swap space..."
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+echo "Swap enabled: $(free -h | grep Swap)"
+
 # Update system
 echo "[1/10] Updating system packages..."
 apt-get update
@@ -236,6 +245,8 @@ chown ubuntu:ubuntu "$OPENCLAW_DIR/docker-compose.override.yml"
 # Build Docker image
 echo "[8/10] Building OpenClaw Docker image (this may take 10-15 minutes)..."
 cd "$OPENCLAW_DIR"
+# Patch Dockerfile to increase Node.js heap size for low-RAM instances (t4g.small = 2GB)
+sudo -u ubuntu sed -i '/^RUN pnpm build/i ENV NODE_OPTIONS="--max-old-space-size=1536"' Dockerfile
 sudo -u ubuntu docker build -t openclaw:local -f Dockerfile .
 
 # Start OpenClaw

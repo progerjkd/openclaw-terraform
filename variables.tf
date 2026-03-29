@@ -7,6 +7,12 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "aws_profile" {
+  description = "AWS CLI profile to use for authentication (leave empty to use default/environment)"
+  type        = string
+  default     = ""
+}
+
 variable "environment" {
   description = "Environment name (dev, staging, prod)"
   type        = string
@@ -27,7 +33,7 @@ variable "team_name" {
 
 # Instance Configuration
 variable "instance_type" {
-  description = "EC2 instance type (ARM64)"
+  description = "EC2 instance type (ARM64) - used for on-demand fallback"
   type        = string
   default     = "t4g.small"
 
@@ -35,6 +41,18 @@ variable "instance_type" {
     condition     = can(regex("^t4g\\.", var.instance_type))
     error_message = "Instance type must be ARM64 (t4g family)."
   }
+}
+
+variable "use_spot_instances" {
+  description = "Use spot instances instead of on-demand (recommended for cost savings)"
+  type        = bool
+  default     = true
+}
+
+variable "spot_max_price" {
+  description = "Maximum price per hour for spot instances (empty = on-demand price)"
+  type        = string
+  default     = "" # Use on-demand price as max
 }
 
 variable "root_volume_size" {

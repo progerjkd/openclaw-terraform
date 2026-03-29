@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# AWS_PROFILE is read from environment: export AWS_PROFILE=your-profile
 REGION="us-east-1"
 INSTANCE_ID=$(terraform output -raw instance_id 2>/dev/null) || {
   echo "Error: could not read instance_id from terraform output."

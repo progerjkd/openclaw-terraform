@@ -13,7 +13,8 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region  = var.aws_region
+  profile = var.aws_profile != "" ? var.aws_profile : null
 
   default_tags {
     tags = {
@@ -200,6 +201,36 @@ resource "aws_iam_instance_profile" "openclaw_profile" {
   role = aws_iam_role.openclaw_role.name
 }
 
+# IAM Role for Spot Fleet
+resource "aws_iam_role" "spot_fleet_role" {
+  count = var.use_spot_instances ? 1 : 0
+  name  = "${var.project_name}-spot-fleet-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "spotfleet.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-spot-fleet-role"
+  }
+}
+
+# Attach Spot Fleet policy
+resource "aws_iam_role_policy_attachment" "spot_fleet_policy" {
+  count      = var.use_spot_instances ? 1 : 0
+  role       = aws_iam_role.spot_fleet_role[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetTaggingRole"
+}
+
 # SSH Key Pair (if creating new)
 resource "aws_key_pair" "openclaw_key" {
   count = var.create_new_key_pair ? 1 : 0
@@ -224,8 +255,131 @@ resource "aws_ebs_volume" "openclaw_data" {
   }
 }
 
-# EC2 Instance - t4g.small (ARM64)
+# Launch Template for Spot Fleet
+resource "aws_launch_template" "openclaw" {
+  name_prefix   = "${var.project_name}-lt-"
+  image_id      = data.aws_ami.ubuntu_arm64.id
+  key_name      = var.create_new_key_pair ? aws_key_pair.openclaw_key[0].key_name : var.existing_key_name
+  user_data     = base64encode(templatefile("${path.module}/user-data.sh", {
+    anthropic_api_key     = var.anthropic_api_key
+    openai_api_key        = var.openai_api_key
+    gateway_token         = random_password.gateway_token.result
+    telegram_bot_token    = var.telegram_bot_token
+    discord_bot_token     = var.discord_bot_token
+    openclaw_repo_url     = var.openclaw_repo_url
+    enable_tailscale      = var.enable_tailscale
+    tailscale_auth_key    = var.tailscale_auth_key
+  }))
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.openclaw_profile.name
+  }
+
+  vpc_security_group_ids = [aws_security_group.openclaw_sg.id]
+
+  block_device_mappings {
+    device_name = "/dev/sda1"
+    ebs {
+      volume_type = "gp3"
+      volume_size = var.root_volume_size
+      encrypted   = true
+      delete_on_termination = true
+    }
+  }
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required" # IMDSv2 only for security
+    http_put_response_hop_limit = 1
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "${var.project_name}-spot-instance"
+    }
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# EC2 Spot Fleet with multiple instance types (prioritizing t4g.small)
+resource "aws_spot_fleet_request" "openclaw" {
+  count = var.use_spot_instances ? 1 : 0
+
+  iam_fleet_role                      = aws_iam_role.spot_fleet_role[0].arn
+  target_capacity                     = 1
+  allocation_strategy                 = "lowestPrice"
+  instance_interruption_behaviour     = "stop" # Stop instead of terminate to preserve EBS data
+  wait_for_fulfillment                = true
+  terminate_instances_with_expiration = false
+  replace_unhealthy_instances         = true
+
+  # t4g.small - Priority 0 (highest priority, cheapest)
+  launch_template_config {
+    launch_template_specification {
+      id      = aws_launch_template.openclaw.id
+      version = aws_launch_template.openclaw.latest_version
+    }
+
+    overrides {
+      instance_type     = "t4g.small"
+      priority          = 0
+      spot_price        = var.spot_max_price
+      subnet_id         = var.use_existing_vpc ? var.existing_subnet_id : aws_subnet.openclaw_subnet[0].id
+      weighted_capacity = 1
+    }
+  }
+
+  # t4g.medium - Priority 1 (fallback)
+  launch_template_config {
+    launch_template_specification {
+      id      = aws_launch_template.openclaw.id
+      version = aws_launch_template.openclaw.latest_version
+    }
+
+    overrides {
+      instance_type     = "t4g.medium"
+      priority          = 1
+      spot_price        = var.spot_max_price
+      subnet_id         = var.use_existing_vpc ? var.existing_subnet_id : aws_subnet.openclaw_subnet[0].id
+      weighted_capacity = 1
+    }
+  }
+
+  # t4g.large - Priority 2 (last fallback)
+  launch_template_config {
+    launch_template_specification {
+      id      = aws_launch_template.openclaw.id
+      version = aws_launch_template.openclaw.latest_version
+    }
+
+    overrides {
+      instance_type     = "t4g.large"
+      priority          = 2
+      spot_price        = var.spot_max_price
+      subnet_id         = var.use_existing_vpc ? var.existing_subnet_id : aws_subnet.openclaw_subnet[0].id
+      weighted_capacity = 1
+    }
+  }
+
+  tags = {
+    Name = "${var.project_name}-spot-fleet"
+  }
+
+  lifecycle {
+    ignore_changes = [
+      target_capacity, # Prevent recreation on manual capacity changes
+    ]
+  }
+}
+
+# EC2 Instance - On-Demand (fallback when spot disabled)
 resource "aws_instance" "openclaw" {
+  count = var.use_spot_instances ? 0 : 1
+
   ami                    = data.aws_ami.ubuntu_arm64.id
   instance_type          = var.instance_type
   key_name               = var.create_new_key_pair ? aws_key_pair.openclaw_key[0].key_name : var.existing_key_name
@@ -267,15 +421,36 @@ resource "aws_instance" "openclaw" {
   }
 }
 
-# Attach EBS volume
-resource "aws_volume_attachment" "openclaw_data_attachment" {
-  device_name = "/dev/sdf"
-  volume_id   = aws_ebs_volume.openclaw_data.id
-  instance_id = aws_instance.openclaw.id
+# Data source to get instance ID from spot fleet
+data "aws_instances" "openclaw_spot" {
+  count = var.use_spot_instances ? 1 : 0
 
-  # Force detach on destroy to avoid errors
+  filter {
+    name   = "tag:aws:ec2spot:fleet-request-id"
+    values = [aws_spot_fleet_request.openclaw[0].id]
+  }
+
+  filter {
+    name   = "instance-state-name"
+    values = ["running", "stopped"]
+  }
+
+  depends_on = [aws_spot_fleet_request.openclaw]
+}
+
+# Attach EBS volume to on-demand instance
+resource "aws_volume_attachment" "openclaw_data_attachment" {
+  count = var.use_spot_instances ? 0 : 1
+
+  device_name  = "/dev/sdf"
+  volume_id    = aws_ebs_volume.openclaw_data.id
+  instance_id  = aws_instance.openclaw[0].id
   force_detach = true
 }
+
+# NOTE: For spot instances, the EBS volume must be manually attached after the spot instance launches
+# Use this command after spot instance is running:
+# aws ec2 attach-volume --volume-id $(terraform output -raw data_volume_id) --instance-id $(terraform output -raw instance_id) --device /dev/sdf --region us-east-1
 
 # Generate secure gateway token
 resource "random_password" "gateway_token" {
@@ -283,12 +458,15 @@ resource "random_password" "gateway_token" {
   special = false
 }
 
-# Elastic IP (optional, for static IP)
-resource "aws_eip" "openclaw_eip" {
-  count = var.allocate_elastic_ip ? 1 : 0
+# Note: Elastic IP not supported for spot instances (instance ID changes on stop/start)
+# For static IP with spot instances, consider using an Application Load Balancer or Route53 with health checks
+
+# Elastic IP for on-demand instance (optional, for static IP)
+resource "aws_eip" "openclaw_eip_ondemand" {
+  count = var.allocate_elastic_ip && !var.use_spot_instances ? 1 : 0
 
   domain   = "vpc"
-  instance = aws_instance.openclaw.id
+  instance = aws_instance.openclaw[0].id
 
   tags = {
     Name = "${var.project_name}-eip"
