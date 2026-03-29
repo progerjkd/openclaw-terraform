@@ -130,21 +130,27 @@ resource "aws_security_group" "openclaw_sg" {
   }
 
   # Optional: HTTPS for reverse proxy (if you add Nginx later)
-  ingress {
-    description = "HTTPS (optional reverse proxy)"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = var.enable_https ? ["0.0.0.0/0"] : []
+  dynamic "ingress" {
+    for_each = var.enable_https ? [1] : []
+    content {
+      description = "HTTPS (optional reverse proxy)"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
   }
 
   # Optional: HTTP for Let's Encrypt challenge
-  ingress {
-    description = "HTTP (optional LetsEncrypt)"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = var.enable_https ? ["0.0.0.0/0"] : []
+  dynamic "ingress" {
+    for_each = var.enable_https ? [1] : []
+    content {
+      description = "HTTP (optional LetsEncrypt)"
+      from_port   = 80
+      to_port     = 80
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
   }
 
   # Outbound internet access (for API calls, Docker pulls, etc.)
@@ -312,10 +318,10 @@ resource "aws_spot_fleet_request" "openclaw" {
   iam_fleet_role                      = aws_iam_role.spot_fleet_role[0].arn
   target_capacity                     = 1
   allocation_strategy                 = "lowestPrice"
-  instance_interruption_behaviour     = "stop" # Stop instead of terminate to preserve EBS data
+  instance_interruption_behaviour     = "terminate" # Data lives on the separate EBS volume; terminate avoids accumulating stopped instances
   wait_for_fulfillment                = true
   terminate_instances_with_expiration = false
-  replace_unhealthy_instances         = true
+  replace_unhealthy_instances         = false # Prevents fleet from relaunching when we intentionally scale to 0
 
   # t4g.small - Priority 0 (highest priority, cheapest)
   launch_template_config {

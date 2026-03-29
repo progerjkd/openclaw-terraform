@@ -147,6 +147,17 @@ output "quick_start_guide" {
   EOT
 }
 
+# Stop/Resume commands
+output "stop_command" {
+  description = "Command to stop OpenClaw (scales fleet to 0 for spot, stops instance for on-demand)"
+  value       = var.use_spot_instances ? "aws ec2 modify-spot-fleet-request --spot-fleet-request-id ${aws_spot_fleet_request.openclaw[0].id} --target-capacity 0 --region ${var.aws_region}${var.aws_profile != "" ? " --profile ${var.aws_profile}" : ""}" : "aws ec2 stop-instances --instance-ids ${aws_instance.openclaw[0].id} --region ${var.aws_region}${var.aws_profile != "" ? " --profile ${var.aws_profile}" : ""}"
+}
+
+output "start_command" {
+  description = "Command to resume OpenClaw (scales fleet to 1 for spot, starts instance for on-demand)"
+  value       = var.use_spot_instances ? "aws ec2 modify-spot-fleet-request --spot-fleet-request-id ${aws_spot_fleet_request.openclaw[0].id} --target-capacity 1 --region ${var.aws_region}${var.aws_profile != "" ? " --profile ${var.aws_profile}" : ""}" : "aws ec2 start-instances --instance-ids ${aws_instance.openclaw[0].id} --region ${var.aws_region}${var.aws_profile != "" ? " --profile ${var.aws_profile}" : ""}"
+}
+
 # Tailscale IP
 output "tailscale_ip" {
   description = "Tailscale IP (check on instance after deployment)"
