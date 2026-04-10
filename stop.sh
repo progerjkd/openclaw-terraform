@@ -4,11 +4,18 @@ set -euo pipefail
 # AWS_PROFILE is read from environment: export AWS_PROFILE=your-profile
 REGION="us-east-1"
 
-SPOT_FLEET_ID=$(terraform output -raw spot_fleet_id 2>/dev/null || echo "")
+# Resolve terraform binary (handles cases where it is not on PATH)
+TERRAFORM=$(command -v terraform 2>/dev/null || echo /opt/homebrew/bin/terraform)
+if [[ ! -x "$TERRAFORM" ]]; then
+  echo "Error: terraform not found. Install via: brew install terraform"
+  exit 1
+fi
+
+SPOT_FLEET_ID=$("$TERRAFORM" output -raw spot_fleet_id 2>/dev/null || echo "")
 
 if [[ -n "$SPOT_FLEET_ID" ]]; then
   # Spot: scale fleet to 0 — terminates the instance, EBS data volume is preserved
-  INSTANCE_ID=$(terraform output -raw instance_id 2>/dev/null || echo "pending")
+  INSTANCE_ID=$("$TERRAFORM" output -raw instance_id 2>/dev/null || echo "pending")
 
   echo "Spot Fleet: $SPOT_FLEET_ID"
   [[ "$INSTANCE_ID" != "pending" ]] && echo "Instance:   $INSTANCE_ID"
@@ -50,7 +57,7 @@ if [[ -n "$SPOT_FLEET_ID" ]]; then
 
 else
   # On-demand: stop the instance directly
-  INSTANCE_ID=$(terraform output -raw instance_id 2>/dev/null) || {
+  INSTANCE_ID=$("$TERRAFORM" output -raw instance_id 2>/dev/null) || {
     echo "Error: could not read instance_id from terraform output."
     exit 1
   }

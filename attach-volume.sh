@@ -4,20 +4,36 @@ set -euo pipefail
 # AWS_PROFILE is read from environment: export AWS_PROFILE=your-profile
 REGION="us-east-1"
 
-echo "Checking spot instance and EBS volume status..."
-
-# Get instance and volume IDs
-INSTANCE_ID=$(terraform output -raw instance_id 2>/dev/null) || {
-  echo "Error: could not read instance_id from terraform output."
-  exit 1
-}
-
-if [[ "$INSTANCE_ID" == "pending" ]]; then
-  echo "Spot instance is still pending. Wait a moment and try again."
+# Resolve terraform binary (handles cases where it is not on PATH)
+TERRAFORM=$(command -v terraform 2>/dev/null || echo /opt/homebrew/bin/terraform)
+if [[ ! -x "$TERRAFORM" ]]; then
+  echo "Error: terraform not found. Install via: brew install terraform"
   exit 1
 fi
 
-VOLUME_ID=$(terraform output -raw data_volume_id 2>/dev/null) || {
+echo "Checking spot instance and EBS volume status..."
+
+SPOT_FLEET_ID=$("$TERRAFORM" output -raw spot_fleet_id 2>/dev/null || echo "")
+
+if [[ -n "$SPOT_FLEET_ID" ]]; then
+  # Query instance directly from fleet — no terraform refresh needed
+  INSTANCE_ID=$(aws ec2 describe-spot-fleet-instances \
+    --spot-fleet-request-id "$SPOT_FLEET_ID" \
+    --region "$REGION" \
+    --query 'ActiveInstances[0].InstanceId' \
+    --output text 2>/dev/null || echo "None")
+  if [[ "$INSTANCE_ID" == "None" || -z "$INSTANCE_ID" ]]; then
+    echo "Spot instance is still pending. Wait a moment and try again."
+    exit 1
+  fi
+else
+  INSTANCE_ID=$("$TERRAFORM" output -raw instance_id 2>/dev/null) || {
+    echo "Error: could not read instance_id from terraform output."
+    exit 1
+  }
+fi
+
+VOLUME_ID=$("$TERRAFORM" output -raw data_volume_id 2>/dev/null) || {
   echo "Error: could not read data_volume_id from terraform output."
   exit 1
 }

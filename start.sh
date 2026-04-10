@@ -5,7 +5,14 @@ set -euo pipefail
 REGION="us-east-1"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-SPOT_FLEET_ID=$(terraform output -raw spot_fleet_id 2>/dev/null || echo "")
+# Resolve terraform binary (handles cases where it is not on PATH)
+TERRAFORM=$(command -v terraform 2>/dev/null || echo /opt/homebrew/bin/terraform)
+if [[ ! -x "$TERRAFORM" ]]; then
+  echo "Error: terraform not found. Install via: brew install terraform"
+  exit 1
+fi
+
+SPOT_FLEET_ID=$("$TERRAFORM" output -raw spot_fleet_id 2>/dev/null || echo "")
 
 if [[ -n "$SPOT_FLEET_ID" ]]; then
   # Spot: scale fleet to 1 — launches a new instance, then reattach EBS
@@ -29,21 +36,25 @@ if [[ -n "$SPOT_FLEET_ID" ]]; then
       --target-capacity 1 \
       --region "$REGION"
 
-    echo "Waiting for spot instance to launch (30-60s)..."
-    for i in $(seq 1 30); do
-      terraform refresh -no-color > /dev/null 2>&1
-      INSTANCE_ID=$(terraform output -raw instance_id 2>/dev/null || echo "pending")
-      if [[ "$INSTANCE_ID" != "pending" ]]; then
+    echo "Waiting for spot instance to launch (30-120s)..."
+    INSTANCE_ID=""
+    for i in $(seq 1 60); do
+      INSTANCE_ID=$(aws ec2 describe-spot-fleet-instances \
+        --spot-fleet-request-id "$SPOT_FLEET_ID" \
+        --region "$REGION" \
+        --query 'ActiveInstances[0].InstanceId' \
+        --output text 2>/dev/null || echo "None")
+      if [[ "$INSTANCE_ID" != "None" && -n "$INSTANCE_ID" ]]; then
         echo "Instance launched: $INSTANCE_ID"
         break
       fi
+      INSTANCE_ID=""
       echo "  Still pending... ($((i * 5))s)"
       sleep 5
     done
 
-    INSTANCE_ID=$(terraform output -raw instance_id 2>/dev/null || echo "pending")
-    if [[ "$INSTANCE_ID" == "pending" ]]; then
-      echo "Timed out waiting for spot instance. Run 'terraform refresh' and './attach-volume.sh' manually."
+    if [[ -z "$INSTANCE_ID" ]]; then
+      echo "Timed out waiting for spot instance. Run './attach-volume.sh' manually once it appears."
       exit 1
     fi
 
@@ -58,7 +69,7 @@ if [[ -n "$SPOT_FLEET_ID" ]]; then
   "$SCRIPT_DIR/attach-volume.sh"
 
   ip=$(aws ec2 describe-instances \
-    --instance-ids "$(terraform output -raw instance_id)" \
+    --instance-ids "$INSTANCE_ID" \
     --region "$REGION" \
     --query 'Reservations[0].Instances[0].PublicIpAddress' \
     --output text)
@@ -72,7 +83,7 @@ if [[ -n "$SPOT_FLEET_ID" ]]; then
 
 else
   # On-demand: start the instance directly
-  INSTANCE_ID=$(terraform output -raw instance_id 2>/dev/null) || {
+  INSTANCE_ID=$("$TERRAFORM" output -raw instance_id 2>/dev/null) || {
     echo "Error: could not read instance_id from terraform output."
     exit 1
   }

@@ -43,6 +43,12 @@ variable "instance_type" {
   }
 }
 
+variable "fleet_target_capacity" {
+  description = "Spot fleet target capacity (0 = stopped, 1 = running)"
+  type        = number
+  default     = 1
+}
+
 variable "use_spot_instances" {
   description = "Use spot instances instead of on-demand (recommended for cost savings)"
   type        = bool

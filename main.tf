@@ -18,10 +18,10 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = "OpenClaw"
-      Environment = var.environment
-      ManagedBy   = "Terraform"
-      Team        = var.team_name
+      project     = "openclaw"
+      environment = var.environment
+      managed-by  = "terraform"
+      team        = var.team_name
     }
   }
 }
@@ -56,7 +56,7 @@ resource "aws_vpc" "openclaw_vpc" {
   enable_dns_support   = true
 
   tags = {
-    Name = "${var.project_name}-vpc"
+    name = "${var.project_name}-vpc"
   }
 }
 
@@ -70,7 +70,7 @@ resource "aws_subnet" "openclaw_subnet" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.project_name}-subnet"
+    name = "${var.project_name}-subnet"
   }
 }
 
@@ -81,7 +81,7 @@ resource "aws_internet_gateway" "openclaw_igw" {
   vpc_id = aws_vpc.openclaw_vpc[0].id
 
   tags = {
-    Name = "${var.project_name}-igw"
+    name = "${var.project_name}-igw"
   }
 }
 
@@ -97,7 +97,7 @@ resource "aws_route_table" "openclaw_rt" {
   }
 
   tags = {
-    Name = "${var.project_name}-rt"
+    name = "${var.project_name}-rt"
   }
 }
 
@@ -163,7 +163,7 @@ resource "aws_security_group" "openclaw_sg" {
   }
 
   tags = {
-    Name = "${var.project_name}-sg"
+    name = "${var.project_name}-sg"
   }
 }
 
@@ -185,7 +185,7 @@ resource "aws_iam_role" "openclaw_role" {
   })
 
   tags = {
-    Name = "${var.project_name}-ec2-role"
+    name = "${var.project_name}-ec2-role"
   }
 }
 
@@ -226,7 +226,7 @@ resource "aws_iam_role" "spot_fleet_role" {
   })
 
   tags = {
-    Name = "${var.project_name}-spot-fleet-role"
+    name = "${var.project_name}-spot-fleet-role"
   }
 }
 
@@ -245,7 +245,7 @@ resource "aws_key_pair" "openclaw_key" {
   public_key = var.ssh_public_key
 
   tags = {
-    Name = "${var.project_name}-key"
+    name = "${var.project_name}-key"
   }
 }
 
@@ -306,6 +306,13 @@ resource "aws_launch_template" "openclaw" {
     }
   }
 
+  tag_specifications {
+    resource_type = "volume"
+    tags = {
+      Name = "${var.project_name}-root"
+    }
+  }
+
   lifecycle {
     create_before_destroy = true
   }
@@ -316,7 +323,7 @@ resource "aws_spot_fleet_request" "openclaw" {
   count = var.use_spot_instances ? 1 : 0
 
   iam_fleet_role                      = aws_iam_role.spot_fleet_role[0].arn
-  target_capacity                     = 1
+  target_capacity                     = var.fleet_target_capacity
   allocation_strategy                 = "lowestPrice"
   instance_interruption_behaviour     = "terminate" # Data lives on the separate EBS volume; terminate avoids accumulating stopped instances
   wait_for_fulfillment                = true
@@ -355,31 +362,10 @@ resource "aws_spot_fleet_request" "openclaw" {
     }
   }
 
-  # t4g.large - Priority 2 (last fallback)
-  launch_template_config {
-    launch_template_specification {
-      id      = aws_launch_template.openclaw.id
-      version = aws_launch_template.openclaw.latest_version
-    }
-
-    overrides {
-      instance_type     = "t4g.large"
-      priority          = 2
-      spot_price        = var.spot_max_price
-      subnet_id         = var.use_existing_vpc ? var.existing_subnet_id : aws_subnet.openclaw_subnet[0].id
-      weighted_capacity = 1
-    }
-  }
-
   tags = {
-    Name = "${var.project_name}-spot-fleet"
+    name = "${var.project_name}-spot-fleet"
   }
 
-  lifecycle {
-    ignore_changes = [
-      target_capacity, # Prevent recreation on manual capacity changes
-    ]
-  }
 }
 
 # EC2 Instance - On-Demand (fallback when spot disabled)
@@ -397,6 +383,9 @@ resource "aws_instance" "openclaw" {
     volume_type = "gp3"
     volume_size = var.root_volume_size
     encrypted   = true
+    tags = {
+      Name = "${var.project_name}-root"
+    }
   }
 
   user_data = templatefile("${path.module}/user-data.sh", {
@@ -475,7 +464,7 @@ resource "aws_eip" "openclaw_eip_ondemand" {
   instance = aws_instance.openclaw[0].id
 
   tags = {
-    Name = "${var.project_name}-eip"
+    name = "${var.project_name}-eip"
   }
 }
 
@@ -485,6 +474,6 @@ resource "aws_cloudwatch_log_group" "openclaw_logs" {
   retention_in_days = var.log_retention_days
 
   tags = {
-    Name = "${var.project_name}-logs"
+    name = "${var.project_name}-logs"
   }
 }
