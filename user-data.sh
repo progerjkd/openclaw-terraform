@@ -40,6 +40,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
     lsb-release \
     htop \
     vim \
+    awscli \
     unattended-upgrades
 
 # Setup unattended upgrades for security (non-interactive)
@@ -75,6 +76,38 @@ docker info | grep -i architecture
 # Setup data volume
 echo "[5/10] Setting up data volume..."
 DATA_MOUNT="/opt/openclaw-data"
+DATA_VOLUME_ID="${data_volume_id}"
+
+# IMDSv2: get instance ID and region so we can self-attach the EBS volume
+TOKEN=$(curl -sX PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+INSTANCE_ID=$(curl -sH "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/instance-id)
+REGION=$(curl -sH "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/placement/region)
+
+echo "Attaching EBS volume $DATA_VOLUME_ID to instance $INSTANCE_ID (region $REGION)..."
+
+ATTACHED_TO=$(aws ec2 describe-volumes \
+  --volume-ids "$DATA_VOLUME_ID" --region "$REGION" \
+  --query 'Volumes[0].Attachments[0].InstanceId' --output text 2>/dev/null || echo "None")
+
+if [[ "$ATTACHED_TO" == "$INSTANCE_ID" ]]; then
+    echo "Volume already attached to this instance"
+elif [[ "$ATTACHED_TO" != "None" && "$ATTACHED_TO" != "null" && -n "$ATTACHED_TO" ]]; then
+    echo "Volume attached to old instance $ATTACHED_TO — detaching first..."
+    aws ec2 detach-volume --volume-id "$DATA_VOLUME_ID" --region "$REGION" --force
+    aws ec2 wait volume-available --volume-ids "$DATA_VOLUME_ID" --region "$REGION"
+    aws ec2 attach-volume --volume-id "$DATA_VOLUME_ID" \
+      --instance-id "$INSTANCE_ID" --device /dev/sdf --region "$REGION"
+    aws ec2 wait volume-in-use --volume-ids "$DATA_VOLUME_ID" --region "$REGION"
+    echo "Volume re-attached successfully"
+else
+    aws ec2 attach-volume --volume-id "$DATA_VOLUME_ID" \
+      --instance-id "$INSTANCE_ID" --device /dev/sdf --region "$REGION"
+    aws ec2 wait volume-in-use --volume-ids "$DATA_VOLUME_ID" --region "$REGION"
+    echo "Volume attached successfully"
+fi
 
 # On Nitro instances, /dev/sdf maps to /dev/nvme*n1 but the exact name varies.
 # Find the EBS data volume by excluding any disk that has mounted partitions.

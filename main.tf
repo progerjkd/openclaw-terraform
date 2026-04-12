@@ -237,6 +237,21 @@ resource "aws_iam_role_policy_attachment" "spot_fleet_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetTaggingRole"
 }
 
+# Allow the instance to self-attach its EBS data volume on boot
+resource "aws_iam_role_policy" "ebs_self_attach" {
+  name = "${var.project_name}-ebs-self-attach"
+  role = aws_iam_role.openclaw_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ec2:AttachVolume", "ec2:DetachVolume", "ec2:DescribeVolumes"]
+      Resource = "*"
+    }]
+  })
+}
+
 # SSH Key Pair (if creating new)
 resource "aws_key_pair" "openclaw_key" {
   count = var.create_new_key_pair ? 1 : 0
@@ -275,6 +290,7 @@ resource "aws_launch_template" "openclaw" {
     openclaw_repo_url     = var.openclaw_repo_url
     enable_tailscale      = var.enable_tailscale
     tailscale_auth_key    = var.tailscale_auth_key
+    data_volume_id        = aws_ebs_volume.openclaw_data.id
   }))
 
   iam_instance_profile {
@@ -397,6 +413,7 @@ resource "aws_instance" "openclaw" {
     openclaw_repo_url     = var.openclaw_repo_url
     enable_tailscale      = var.enable_tailscale
     tailscale_auth_key    = var.tailscale_auth_key
+    data_volume_id        = aws_ebs_volume.openclaw_data.id
   })
 
   metadata_options {
@@ -442,10 +459,6 @@ resource "aws_volume_attachment" "openclaw_data_attachment" {
   instance_id  = aws_instance.openclaw[0].id
   force_detach = true
 }
-
-# NOTE: For spot instances, the EBS volume must be manually attached after the spot instance launches
-# Use this command after spot instance is running:
-# aws ec2 attach-volume --volume-id $(terraform output -raw data_volume_id) --instance-id $(terraform output -raw instance_id) --device /dev/sdf --region us-east-1
 
 # Generate secure gateway token
 resource "random_password" "gateway_token" {
