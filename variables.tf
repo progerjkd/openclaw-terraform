@@ -1,5 +1,6 @@
 # Variables for OpenClaw AWS Infrastructure
 
+
 # General Configuration
 variable "aws_region" {
   description = "AWS region to deploy resources"

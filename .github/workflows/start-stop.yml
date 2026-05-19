@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 env:
-  TF_VERSION: "1.9.8"
+  TF_VERSION: "~1.15.3"
   AWS_DEFAULT_REGION: us-east-1
 
 jobs:
@@ -25,14 +25,14 @@ jobs:
     runs-on: ubuntu-latest
     if: github.actor == github.repository_owner
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::699475921438:role/github-actions-openclaw-terraform
           aws-region: us-east-1
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
