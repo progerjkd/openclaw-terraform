@@ -30,3 +30,6 @@ crash.*.log
 
 # Plan files
 *.tfplan
+
+# Claude Code local settings (not relevant to the project)
+.claude/

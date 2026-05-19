@@ -17,6 +17,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  id-token: write
 
 env:
   TF_VERSION: "1.9.8"
@@ -40,14 +41,13 @@ jobs:
     name: Plan
     runs-on: ubuntu-latest
     needs: fmt
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.actor == github.repository_owner
     steps:
       - uses: actions/checkout@v4
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::699475921438:role/github-actions-openclaw-terraform
           aws-region: us-east-1
 
       - uses: hashicorp/setup-terraform@v3
@@ -67,7 +67,7 @@ jobs:
 
       - name: Terraform Plan
         id: plan
-        run: terraform plan -no-color -input=false 2>&1 | tee plan.txt
+        run: terraform plan -no-color -input=false -var="aws_profile=" 2>&1 | tee plan.txt
         continue-on-error: true
 
       - name: Post plan to PR
@@ -95,15 +95,14 @@ jobs:
     name: Apply
     runs-on: ubuntu-latest
     needs: fmt
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.actor == github.repository_owner
     environment: production
     steps:
       - uses: actions/checkout@v4
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::699475921438:role/github-actions-openclaw-terraform
           aws-region: us-east-1
 
       - uses: hashicorp/setup-terraform@v3
@@ -122,4 +121,4 @@ jobs:
             -input=false
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve -input=false
+        run: terraform apply -auto-approve -input=false -var="aws_profile="

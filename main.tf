@@ -282,19 +282,19 @@ resource "aws_ebs_volume" "openclaw_data" {
 
 # Launch Template for Spot Fleet
 resource "aws_launch_template" "openclaw" {
-  name_prefix   = "${var.project_name}-lt-"
-  image_id      = data.aws_ami.ubuntu_arm64.id
-  key_name      = var.create_new_key_pair ? aws_key_pair.openclaw_key[0].key_name : var.existing_key_name
-  user_data     = base64encode(templatefile("${path.module}/user-data.sh", {
-    anthropic_api_key     = var.anthropic_api_key
-    openai_api_key        = var.openai_api_key
-    gateway_token         = random_password.gateway_token.result
-    telegram_bot_token    = var.telegram_bot_token
-    discord_bot_token     = var.discord_bot_token
-    openclaw_version      = var.openclaw_version
-    enable_tailscale      = var.enable_tailscale
-    tailscale_auth_key    = var.tailscale_auth_key
-    data_volume_id        = aws_ebs_volume.openclaw_data.id
+  name_prefix = "${var.project_name}-lt-"
+  image_id    = data.aws_ami.ubuntu_arm64.id
+  key_name    = var.create_new_key_pair ? aws_key_pair.openclaw_key[0].key_name : var.existing_key_name
+  user_data = base64encode(templatefile("${path.module}/user-data.sh", {
+    anthropic_api_key  = var.anthropic_api_key
+    openai_api_key     = var.openai_api_key
+    gateway_token      = random_password.gateway_token.result
+    telegram_bot_token = var.telegram_bot_token
+    discord_bot_token  = var.discord_bot_token
+    openclaw_version   = var.openclaw_version
+    enable_tailscale   = var.enable_tailscale
+    tailscale_auth_key = var.tailscale_auth_key
+    data_volume_id     = aws_ebs_volume.openclaw_data.id
   }))
 
   iam_instance_profile {
@@ -306,9 +306,9 @@ resource "aws_launch_template" "openclaw" {
   block_device_mappings {
     device_name = "/dev/sda1"
     ebs {
-      volume_type = "gp3"
-      volume_size = var.root_volume_size
-      encrypted   = true
+      volume_type           = "gp3"
+      volume_size           = var.root_volume_size
+      encrypted             = true
       delete_on_termination = true
     }
   }
@@ -415,15 +415,15 @@ resource "aws_instance" "openclaw" {
   }
 
   user_data = templatefile("${path.module}/user-data.sh", {
-    anthropic_api_key     = var.anthropic_api_key
-    openai_api_key        = var.openai_api_key
-    gateway_token         = random_password.gateway_token.result
-    telegram_bot_token    = var.telegram_bot_token
-    discord_bot_token     = var.discord_bot_token
-    openclaw_version      = var.openclaw_version
-    enable_tailscale      = var.enable_tailscale
-    tailscale_auth_key    = var.tailscale_auth_key
-    data_volume_id        = aws_ebs_volume.openclaw_data.id
+    anthropic_api_key  = var.anthropic_api_key
+    openai_api_key     = var.openai_api_key
+    gateway_token      = random_password.gateway_token.result
+    telegram_bot_token = var.telegram_bot_token
+    discord_bot_token  = var.discord_bot_token
+    openclaw_version   = var.openclaw_version
+    enable_tailscale   = var.enable_tailscale
+    tailscale_auth_key = var.tailscale_auth_key
+    data_volume_id     = aws_ebs_volume.openclaw_data.id
   })
 
   metadata_options {

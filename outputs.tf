@@ -23,7 +23,7 @@ output "instance_private_ip" {
 # Instance type - actual type from spot fleet or configured type
 output "instance_type" {
   description = "Instance type (actual type if spot fleet)"
-  value = var.use_spot_instances ? "spot-fleet(t4g.small|medium|large)" : var.instance_type
+  value       = var.use_spot_instances ? "spot-fleet(t4g.small|medium|large)" : var.instance_type
 }
 
 # Spot fleet ID
@@ -41,13 +41,13 @@ output "elastic_ip" {
 # SSH Command
 output "ssh_command" {
   description = "SSH command to connect to the instance"
-  value = var.use_spot_instances ? try("ssh ubuntu@${data.aws_instances.openclaw_spot[0].public_ips[0]}", "terraform refresh # to get spot instance IP") : "ssh ubuntu@${var.allocate_elastic_ip ? aws_eip.openclaw_eip_ondemand[0].public_ip : aws_instance.openclaw[0].public_ip}"
+  value       = var.use_spot_instances ? try("ssh ubuntu@${data.aws_instances.openclaw_spot[0].public_ips[0]}", "terraform refresh # to get spot instance IP") : "ssh ubuntu@${var.allocate_elastic_ip ? aws_eip.openclaw_eip_ondemand[0].public_ip : aws_instance.openclaw[0].public_ip}"
 }
 
 # SSH Tunnel Command
 output "ssh_tunnel_command" {
   description = "SSH tunnel command for Control UI access"
-  value = var.use_spot_instances ? try("ssh -fN -L 18789:localhost:18789 ubuntu@${data.aws_instances.openclaw_spot[0].public_ips[0]}", "terraform refresh # to get spot instance IP") : "ssh -fN -L 18789:localhost:18789 ubuntu@${var.allocate_elastic_ip ? aws_eip.openclaw_eip_ondemand[0].public_ip : aws_instance.openclaw[0].public_ip}"
+  value       = var.use_spot_instances ? try("ssh -fN -L 18789:localhost:18789 ubuntu@${data.aws_instances.openclaw_spot[0].public_ips[0]}", "terraform refresh # to get spot instance IP") : "ssh -fN -L 18789:localhost:18789 ubuntu@${var.allocate_elastic_ip ? aws_eip.openclaw_eip_ondemand[0].public_ip : aws_instance.openclaw[0].public_ip}"
 }
 
 # Control UI URL
@@ -183,7 +183,7 @@ output "estimated_monthly_cost" {
     Total estimated: ~$${3.60 + (var.root_volume_size * 0.08) + (var.data_volume_size * 0.08)}/month
     (using t4g.small most of the time)
     EOT
-  ) : (
+    ) : (
     <<-EOT
     On-Demand Pricing:
     - Instance (${var.instance_type}): ~$12.10/month (24/7)
