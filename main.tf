@@ -334,6 +334,10 @@ resource "aws_launch_template" "openclaw" {
   }
 
 
+  tags = {
+    Name = "${var.project_name}-launch-template"
+  }
+
   lifecycle {
     create_before_destroy = true
   }
