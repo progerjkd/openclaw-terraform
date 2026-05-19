@@ -30,10 +30,18 @@ if [[ -n "$SPOT_FLEET_ID" ]]; then
     --query 'SpotFleetRequestConfigs[0].SpotFleetRequestConfig.TargetCapacity' \
     --output text)
 
+  INSTANCE_ID=""
+
   if [[ "$current" != "0" ]]; then
     echo ""
     echo "Fleet target capacity is already $current."
-    # Still fall through to attach-volume in case it needs reattachment
+    # Look up running instance so we can show the IP below
+    INSTANCE_ID=$(aws ec2 describe-spot-fleet-instances \
+      --spot-fleet-request-id "$SPOT_FLEET_ID" \
+      --region "$REGION" \
+      --query 'ActiveInstances[0].InstanceId' \
+      --output text 2>/dev/null || echo "")
+    [[ "$INSTANCE_ID" == "None" ]] && INSTANCE_ID=""
   else
     echo ""
     echo "Scaling fleet to 1..."
@@ -74,18 +82,20 @@ if [[ -n "$SPOT_FLEET_ID" ]]; then
   echo "Attaching EBS data volume..."
   "$SCRIPT_DIR/attach-volume.sh"
 
-  ip=$(aws ec2 describe-instances \
-    --instance-ids "$INSTANCE_ID" \
-    --region "$REGION" \
-    --query 'Reservations[0].Instances[0].PublicIpAddress' \
-    --output text)
-
   echo ""
   echo "OpenClaw is running!"
-  echo "Public IP:   $ip"
-  echo ""
-  echo "SSH tunnel:  ssh -fN -L 18789:localhost:18789 ubuntu@$ip"
-  echo "Control UI:  http://localhost:18789/"
+
+  if [[ -n "$INSTANCE_ID" ]]; then
+    ip=$(aws ec2 describe-instances \
+      --instance-ids "$INSTANCE_ID" \
+      --region "$REGION" \
+      --query 'Reservations[0].Instances[0].PublicIpAddress' \
+      --output text)
+    echo "Public IP:   $ip"
+    echo ""
+    echo "SSH tunnel:  ssh -fN -L 18789:localhost:18789 ubuntu@$ip"
+    echo "Control UI:  http://localhost:18789/"
+  fi
 
 else
   # On-demand: start the instance directly
