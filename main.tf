@@ -491,6 +491,12 @@ resource "aws_eip" "openclaw_eip_ondemand" {
   }
 }
 
+# Activate "project" as a Cost Allocation Tag so it appears as a filter in Cost Explorer
+resource "aws_ce_cost_allocation_tag" "project" {
+  tag_key = "project"
+  status  = "Active"
+}
+
 # CloudWatch Log Group for OpenClaw logs
 resource "aws_cloudwatch_log_group" "openclaw_logs" {
   name              = "/aws/ec2/${var.project_name}"
