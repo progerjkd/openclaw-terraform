@@ -334,6 +334,10 @@ resource "aws_launch_template" "openclaw" {
   }
 
 
+  tags = {
+    Name = "${var.project_name}-launch-template"
+  }
+
   lifecycle {
     create_before_destroy = true
   }
@@ -489,6 +493,12 @@ resource "aws_eip" "openclaw_eip_ondemand" {
   tags = {
     Name = "${var.project_name}-eip"
   }
+}
+
+# Activate "project" as a Cost Allocation Tag so it appears as a filter in Cost Explorer
+resource "aws_ce_cost_allocation_tag" "project" {
+  tag_key = "project"
+  status  = "Active"
 }
 
 # CloudWatch Log Group for OpenClaw logs
