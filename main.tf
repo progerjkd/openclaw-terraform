@@ -2,7 +2,7 @@
 # Deploys OpenClaw on AWS t4g.small (ARM64) with Docker
 
 terraform {
-  required_version = ">= 1.0"
+  required_version = "~> 1.15.3"
 
   required_providers {
     aws = {
