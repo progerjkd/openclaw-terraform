@@ -11,6 +11,10 @@ on:
           - start
           - stop
 
+permissions:
+  id-token: write
+  contents: read
+
 env:
   TF_VERSION: "1.9.8"
   AWS_DEFAULT_REGION: us-east-1
@@ -25,8 +29,7 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::699475921438:role/github-actions-openclaw-terraform
           aws-region: us-east-1
 
       - uses: hashicorp/setup-terraform@v3
