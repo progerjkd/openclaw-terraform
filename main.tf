@@ -495,11 +495,9 @@ resource "aws_eip" "openclaw_eip_ondemand" {
   }
 }
 
-# Activate "project" as a Cost Allocation Tag so it appears as a filter in Cost Explorer
-resource "aws_ce_cost_allocation_tag" "project" {
-  tag_key = "project"
-  status  = "Active"
-}
+# Note: cost allocation tags must be activated from the payer/management account.
+# To filter by project=openclaw in Cost Explorer, go to:
+# AWS Billing Console (payer account) → Cost Allocation Tags → User-defined → activate "project"
 
 # CloudWatch Log Group for OpenClaw logs
 resource "aws_cloudwatch_log_group" "openclaw_logs" {
