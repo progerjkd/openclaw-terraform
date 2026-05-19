@@ -148,10 +148,10 @@ variable "existing_key_name" {
 }
 
 # OpenClaw Configuration
-variable "openclaw_repo_url" {
-  description = "OpenClaw Git repository URL"
+variable "openclaw_version" {
+  description = "OpenClaw image version tag (ghcr.io/openclaw/openclaw:<tag>)"
   type        = string
-  default     = "https://github.com/openclaw/openclaw.git"
+  default     = "latest"
 }
 
 variable "anthropic_api_key" {

@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# AWS_PROFILE is read from environment: export AWS_PROFILE=your-profile
-REGION="us-east-1"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REGION="us-east-1"
+
+# Load AWS_PROFILE from terraform.tfvars if not already set in environment
+if [[ -z "${AWS_PROFILE:-}" ]]; then
+  _profile=$(grep -E '^\s*aws_profile\s*=' "$SCRIPT_DIR/terraform.tfvars" 2>/dev/null | sed 's/.*"\([^"]*\)".*/\1/')
+  [[ -n "$_profile" ]] && export AWS_PROFILE="$_profile"
+  unset _profile
+fi
 
 # Resolve terraform binary (handles cases where it is not on PATH)
 TERRAFORM=$(command -v terraform 2>/dev/null || echo /opt/homebrew/bin/terraform)

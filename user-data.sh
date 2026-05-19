@@ -170,18 +170,37 @@ fi
 # Set permissions
 chown -R ubuntu:ubuntu "$DATA_MOUNT"
 
-# Clone OpenClaw repository
-echo "[6/10] Cloning OpenClaw repository..."
+# Move Docker and containerd data roots to the data volume so the 8GB root
+# volume isn't exhausted by image layers and build cache.
+echo "[5b/10] Configuring Docker and containerd to use data volume..."
+mkdir -p "$DATA_MOUNT/docker" "$DATA_MOUNT/containerd"
+
+# Stop Docker and containerd, reconfigure, restart
+systemctl stop docker docker.socket containerd || true
+
+cat > /etc/docker/daemon.json <<EOF
+{
+  "data-root": "$DATA_MOUNT/docker"
+}
+EOF
+
+mkdir -p /etc/containerd
+cat > /etc/containerd/config.toml <<EOF
+version = 2
+root = "$DATA_MOUNT/containerd"
+state = "/run/containerd"
+EOF
+
+systemctl start containerd
+sleep 2
+systemctl start docker
+echo "Docker Root Dir: $(docker info 2>/dev/null | grep 'Docker Root Dir' || echo 'unknown')"
+
+# Create OpenClaw directory
+echo "[6/10] Creating OpenClaw directory..."
 OPENCLAW_DIR="/opt/openclaw"
-if [ -d "$OPENCLAW_DIR/.git" ]; then
-    echo "OpenClaw repository already exists, pulling latest..."
-    cd "$OPENCLAW_DIR"
-    git pull || true
-else
-    rm -rf "$OPENCLAW_DIR"
-    git clone ${openclaw_repo_url} "$OPENCLAW_DIR"
-fi
-chown -R ubuntu:ubuntu "$OPENCLAW_DIR"
+mkdir -p "$OPENCLAW_DIR"
+chown ubuntu:ubuntu "$OPENCLAW_DIR"
 
 # Create OpenClaw config directory
 echo "[7/10] Creating OpenClaw configuration..."
@@ -233,65 +252,49 @@ GOG_KEYRING_PASSWORD=$(openssl rand -base64 32)
 
 # Node Environment
 NODE_ENV=production
+NODE_OPTIONS=--max-old-space-size=1536
 EOF
 
-# Copy .env to OpenClaw directory
-cp "$CONFIG_DIR/.env" "$OPENCLAW_DIR/.env"
-chown ubuntu:ubuntu "$OPENCLAW_DIR/.env"
-
-# Create docker-compose override for data volume paths
-cat > "$OPENCLAW_DIR/docker-compose.override.yml" <<EOF
-version: '3.8'
-
+# Create standalone docker-compose.yml
+cat > "$OPENCLAW_DIR/docker-compose.yml" <<EOF
 services:
   openclaw-gateway:
-    environment:
-      - OPENCLAW_CONFIG_DIR=$CONFIG_DIR
-      - OPENCLAW_WORKSPACE_DIR=$WORKSPACE_DIR
+    image: ghcr.io/openclaw/openclaw:${openclaw_version}
+    env_file: $CONFIG_DIR/.env
     volumes:
       - $CONFIG_DIR:/home/node/.openclaw
       - $WORKSPACE_DIR:/home/node/.openclaw/workspace
+    ports:
+      - "18789:18789"
     restart: unless-stopped
     command:
-      [
-        "node",
-        "dist/index.js",
-        "gateway",
-        "--allow-unconfigured",
-        "--bind",
-        "lan",
-        "--port",
-        "18789",
-      ]
-
-  openclaw-cli:
-    environment:
-      - OPENCLAW_CONFIG_DIR=$CONFIG_DIR
-      - OPENCLAW_WORKSPACE_DIR=$WORKSPACE_DIR
-    volumes:
-      - $CONFIG_DIR:/home/node/.openclaw
-      - $WORKSPACE_DIR:/home/node/.openclaw/workspace
+      - "node"
+      - "dist/index.js"
+      - "gateway"
+      - "--allow-unconfigured"
+      - "--bind"
+      - "lan"
+      - "--port"
+      - "18789"
 EOF
 
-chown ubuntu:ubuntu "$OPENCLAW_DIR/docker-compose.override.yml"
+chown ubuntu:ubuntu "$OPENCLAW_DIR/docker-compose.yml"
 
-# Build Docker image
-echo "[8/10] Building OpenClaw Docker image (this may take 10-15 minutes)..."
-cd "$OPENCLAW_DIR"
-# Patch Dockerfile to increase Node.js heap size for low-RAM instances (t4g.small = 2GB)
-sudo -u ubuntu sed -i '/^RUN pnpm build/i ENV NODE_OPTIONS="--max-old-space-size=1536"' Dockerfile
-sudo -u ubuntu docker build -t openclaw:local -f Dockerfile .
+# Pull OpenClaw image
+echo "[8/10] Pulling OpenClaw Docker image (ghcr.io/openclaw/openclaw:${openclaw_version})..."
+docker pull ghcr.io/openclaw/openclaw:${openclaw_version}
 
 # Start OpenClaw
 echo "[9/10] Starting OpenClaw with Docker Compose..."
-sudo -u ubuntu docker compose up -d openclaw-gateway
+cd "$OPENCLAW_DIR"
+docker compose up -d openclaw-gateway
 
 # Wait for gateway to start
 echo "Waiting for OpenClaw gateway to start..."
 sleep 10
 
 # Check status
-sudo -u ubuntu docker compose ps
+docker compose ps
 
 # Install Tailscale (optional)
 %{ if enable_tailscale ~}

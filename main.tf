@@ -56,7 +56,7 @@ resource "aws_vpc" "openclaw_vpc" {
   enable_dns_support   = true
 
   tags = {
-    name = "${var.project_name}-vpc"
+    Name = "${var.project_name}-vpc"
   }
 }
 
@@ -70,7 +70,7 @@ resource "aws_subnet" "openclaw_subnet" {
   map_public_ip_on_launch = true
 
   tags = {
-    name = "${var.project_name}-subnet"
+    Name = "${var.project_name}-subnet"
   }
 }
 
@@ -81,7 +81,7 @@ resource "aws_internet_gateway" "openclaw_igw" {
   vpc_id = aws_vpc.openclaw_vpc[0].id
 
   tags = {
-    name = "${var.project_name}-igw"
+    Name = "${var.project_name}-igw"
   }
 }
 
@@ -97,7 +97,7 @@ resource "aws_route_table" "openclaw_rt" {
   }
 
   tags = {
-    name = "${var.project_name}-rt"
+    Name = "${var.project_name}-rt"
   }
 }
 
@@ -163,7 +163,7 @@ resource "aws_security_group" "openclaw_sg" {
   }
 
   tags = {
-    name = "${var.project_name}-sg"
+    Name = "${var.project_name}-sg"
   }
 }
 
@@ -185,7 +185,7 @@ resource "aws_iam_role" "openclaw_role" {
   })
 
   tags = {
-    name = "${var.project_name}-ec2-role"
+    Name = "${var.project_name}-ec2-role"
   }
 }
 
@@ -205,6 +205,10 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_policy" {
 resource "aws_iam_instance_profile" "openclaw_profile" {
   name = "${var.project_name}-instance-profile"
   role = aws_iam_role.openclaw_role.name
+
+  tags = {
+    Name = "${var.project_name}-instance-profile"
+  }
 }
 
 # IAM Role for Spot Fleet
@@ -226,7 +230,7 @@ resource "aws_iam_role" "spot_fleet_role" {
   })
 
   tags = {
-    name = "${var.project_name}-spot-fleet-role"
+    Name = "${var.project_name}-spot-fleet-role"
   }
 }
 
@@ -260,7 +264,7 @@ resource "aws_key_pair" "openclaw_key" {
   public_key = var.ssh_public_key
 
   tags = {
-    name = "${var.project_name}-key"
+    Name = "${var.project_name}-key"
   }
 }
 
@@ -287,7 +291,7 @@ resource "aws_launch_template" "openclaw" {
     gateway_token         = random_password.gateway_token.result
     telegram_bot_token    = var.telegram_bot_token
     discord_bot_token     = var.discord_bot_token
-    openclaw_repo_url     = var.openclaw_repo_url
+    openclaw_version      = var.openclaw_version
     enable_tailscale      = var.enable_tailscale
     tailscale_auth_key    = var.tailscale_auth_key
     data_volume_id        = aws_ebs_volume.openclaw_data.id
@@ -329,6 +333,7 @@ resource "aws_launch_template" "openclaw" {
     }
   }
 
+
   lifecycle {
     create_before_destroy = true
   }
@@ -340,7 +345,7 @@ resource "aws_spot_fleet_request" "openclaw" {
 
   iam_fleet_role                      = aws_iam_role.spot_fleet_role[0].arn
   target_capacity                     = var.fleet_target_capacity
-  allocation_strategy                 = "lowestPrice"
+  allocation_strategy                 = "capacityOptimizedPrioritized"
   instance_interruption_behaviour     = "terminate" # Data lives on the separate EBS volume; terminate avoids accumulating stopped instances
   wait_for_fulfillment                = true
   terminate_instances_with_expiration = false
@@ -350,7 +355,7 @@ resource "aws_spot_fleet_request" "openclaw" {
   launch_template_config {
     launch_template_specification {
       id      = aws_launch_template.openclaw.id
-      version = aws_launch_template.openclaw.latest_version
+      version = "$Latest"
     }
 
     overrides {
@@ -366,7 +371,7 @@ resource "aws_spot_fleet_request" "openclaw" {
   launch_template_config {
     launch_template_specification {
       id      = aws_launch_template.openclaw.id
-      version = aws_launch_template.openclaw.latest_version
+      version = "$Latest"
     }
 
     overrides {
@@ -379,9 +384,14 @@ resource "aws_spot_fleet_request" "openclaw" {
   }
 
   tags = {
-    name = "${var.project_name}-spot-fleet"
+    Name = "${var.project_name}-spot-fleet"
   }
 
+  lifecycle {
+    # target_capacity is managed by start.sh / stop.sh out-of-band;
+    # ignore it so terraform apply doesn't fight the scripts.
+    ignore_changes = [target_capacity]
+  }
 }
 
 # EC2 Instance - On-Demand (fallback when spot disabled)
@@ -410,7 +420,7 @@ resource "aws_instance" "openclaw" {
     gateway_token         = random_password.gateway_token.result
     telegram_bot_token    = var.telegram_bot_token
     discord_bot_token     = var.discord_bot_token
-    openclaw_repo_url     = var.openclaw_repo_url
+    openclaw_version      = var.openclaw_version
     enable_tailscale      = var.enable_tailscale
     tailscale_auth_key    = var.tailscale_auth_key
     data_volume_id        = aws_ebs_volume.openclaw_data.id
@@ -477,7 +487,7 @@ resource "aws_eip" "openclaw_eip_ondemand" {
   instance = aws_instance.openclaw[0].id
 
   tags = {
-    name = "${var.project_name}-eip"
+    Name = "${var.project_name}-eip"
   }
 }
 
@@ -487,6 +497,6 @@ resource "aws_cloudwatch_log_group" "openclaw_logs" {
   retention_in_days = var.log_retention_days
 
   tags = {
-    name = "${var.project_name}-logs"
+    Name = "${var.project_name}-logs"
   }
 }
