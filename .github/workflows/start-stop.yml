@@ -19,6 +19,7 @@ jobs:
   control:
     name: ${{ github.event.inputs.action == 'start' && 'Start' || 'Stop' }} OpenClaw
     runs-on: ubuntu-latest
+    if: github.actor == github.repository_owner
     steps:
       - uses: actions/checkout@v4
 
