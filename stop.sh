@@ -4,8 +4,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REGION="us-east-1"
 
+# --yes / -y skips the confirmation prompt (used by CI)
+AUTO_APPROVE=false
+for arg in "$@"; do
+  case $arg in --yes|-y) AUTO_APPROVE=true ;; esac
+done
+
 # Load AWS_PROFILE from terraform.tfvars if not already set in environment
-if [[ -z "${AWS_PROFILE:-}" ]]; then
+if [[ -z "${AWS_PROFILE:-}" && -z "${AWS_ACCESS_KEY_ID:-}" ]]; then
   _profile=$(grep -E '^\s*aws_profile\s*=' "$SCRIPT_DIR/terraform.tfvars" 2>/dev/null | sed 's/.*"\([^"]*\)".*/\1/')
   [[ -n "$_profile" ]] && export AWS_PROFILE="$_profile"
   unset _profile
@@ -40,10 +46,12 @@ if [[ -n "$SPOT_FLEET_ID" ]]; then
     exit 0
   fi
 
-  read -rp "Scale fleet to 0 (terminates instance, EBS data preserved)? [y/N] " confirm
-  if [[ "$confirm" != [yY] ]]; then
-    echo "Cancelled."
-    exit 0
+  if [[ "$AUTO_APPROVE" != "true" ]]; then
+    read -rp "Scale fleet to 0 (terminates instance, EBS data preserved)? [y/N] " confirm
+    if [[ "$confirm" != [yY] ]]; then
+      echo "Cancelled."
+      exit 0
+    fi
   fi
 
   echo ""
@@ -85,10 +93,12 @@ else
   fi
 
   echo ""
-  read -rp "Stop this instance? [y/N] " confirm
-  if [[ "$confirm" != [yY] ]]; then
-    echo "Cancelled."
-    exit 0
+  if [[ "$AUTO_APPROVE" != "true" ]]; then
+    read -rp "Stop this instance? [y/N] " confirm
+    if [[ "$confirm" != [yY] ]]; then
+      echo "Cancelled."
+      exit 0
+    fi
   fi
 
   echo ""

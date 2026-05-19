@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REGION="us-east-1"
 
 # Load AWS_PROFILE from terraform.tfvars if not already set in environment
-if [[ -z "${AWS_PROFILE:-}" ]]; then
+if [[ -z "${AWS_PROFILE:-}" && -z "${AWS_ACCESS_KEY_ID:-}" ]]; then
   _profile=$(grep -E '^\s*aws_profile\s*=' "$SCRIPT_DIR/terraform.tfvars" 2>/dev/null | sed 's/.*"\([^"]*\)".*/\1/')
   [[ -n "$_profile" ]] && export AWS_PROFILE="$_profile"
   unset _profile
