@@ -343,7 +343,7 @@ resource "aws_launch_template" "openclaw" {
   }
 }
 
-# EC2 Spot Fleet with multiple instance types (prioritizing t4g.small)
+# EC2 Spot Fleet with multiple instance types (priority: t4g.micro → t4g.small → t4g.medium)
 resource "aws_spot_fleet_request" "openclaw" {
   count = var.use_spot_instances ? 1 : 0
 
@@ -355,7 +355,23 @@ resource "aws_spot_fleet_request" "openclaw" {
   terminate_instances_with_expiration = false
   replace_unhealthy_instances         = false # Prevents fleet from relaunching when we intentionally scale to 0
 
-  # t4g.small - Priority 0 (highest priority, cheapest)
+  # t4g.micro - Priority 0 (highest priority, cheapest; 1 GB RAM — relies on swap)
+  launch_template_config {
+    launch_template_specification {
+      id      = aws_launch_template.openclaw.id
+      version = "$Latest"
+    }
+
+    overrides {
+      instance_type     = "t4g.micro"
+      priority          = 0
+      spot_price        = var.spot_max_price
+      subnet_id         = var.use_existing_vpc ? var.existing_subnet_id : aws_subnet.openclaw_subnet[0].id
+      weighted_capacity = 1
+    }
+  }
+
+  # t4g.small - Priority 1
   launch_template_config {
     launch_template_specification {
       id      = aws_launch_template.openclaw.id
@@ -364,14 +380,14 @@ resource "aws_spot_fleet_request" "openclaw" {
 
     overrides {
       instance_type     = "t4g.small"
-      priority          = 0
+      priority          = 1
       spot_price        = var.spot_max_price
       subnet_id         = var.use_existing_vpc ? var.existing_subnet_id : aws_subnet.openclaw_subnet[0].id
       weighted_capacity = 1
     }
   }
 
-  # t4g.medium - Priority 1 (fallback)
+  # t4g.medium - Priority 2 (fallback)
   launch_template_config {
     launch_template_specification {
       id      = aws_launch_template.openclaw.id
@@ -380,7 +396,7 @@ resource "aws_spot_fleet_request" "openclaw" {
 
     overrides {
       instance_type     = "t4g.medium"
-      priority          = 1
+      priority          = 2
       spot_price        = var.spot_max_price
       subnet_id         = var.use_existing_vpc ? var.existing_subnet_id : aws_subnet.openclaw_subnet[0].id
       weighted_capacity = 1
