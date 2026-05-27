@@ -93,17 +93,20 @@ if [[ -n "$SPOT_FLEET_ID" ]]; then
     echo "Launched:  $launch"
 
     # Version info via SSH (non-blocking; skip if unreachable)
+    # Use image label (org.opencontainers.image.version) for the real version number,
+    # independent of whether the tag is "latest" or a pinned version.
     _ver=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes ubuntu@"$ip" \
-      "docker inspect --format '{{.Config.Image}}' \$(docker ps -q --filter name=openclaw 2>/dev/null) 2>/dev/null | grep -o '[^:]*$'" \
+      "cid=\$(docker ps -q --filter name=openclaw 2>/dev/null | head -1); \
+       [ -n \"\$cid\" ] && docker image inspect --format '{{index .Config.Labels \"org.opencontainers.image.version\"}}' \$(docker inspect --format '{{.Image}}' \"\$cid\") 2>/dev/null || true" \
       2>/dev/null || true)
     _upd=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes ubuntu@"$ip" \
       "cat /opt/openclaw-data/config/update-check.json 2>/dev/null" \
       2>/dev/null || true)
     if [[ -n "$_ver" ]]; then
-      echo "Running:   $_ver"
       _latest=$(echo "$_upd" | grep -o '"lastAvailableVersion"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"[^"]*"$' | tr -d '"' || true)
+      echo "Running:   $_ver"
       if [[ -n "$_latest" ]]; then
-        if [[ "$_latest" == "${_ver%%-*}" ]]; then
+        if [[ "$_latest" == "$_ver" ]]; then
           echo "Latest:    $_latest  ✓ up to date"
         else
           echo "Latest:    $_latest  ⚠  run ./stop.sh && ./start.sh to update"
