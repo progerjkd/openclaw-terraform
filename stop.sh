@@ -46,6 +46,18 @@ if [[ -n "$SPOT_FLEET_ID" ]]; then
     exit 0
   fi
 
+  # Show running version before stopping
+  if [[ "$INSTANCE_ID" != "pending" ]]; then
+    _ip=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --region "$REGION" \
+      --query 'Reservations[0].Instances[0].PublicIpAddress' --output text 2>/dev/null || true)
+    if [[ -n "$_ip" && "$_ip" != "None" ]]; then
+      _ver=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes ubuntu@"$_ip" \
+        "docker inspect --format '{{.Config.Image}}' \$(docker ps -q --filter name=openclaw 2>/dev/null) 2>/dev/null | grep -o '[^:]*$'" \
+        2>/dev/null || true)
+      [[ -n "$_ver" ]] && echo "Version:   $_ver"
+    fi
+  fi
+
   if [[ "$AUTO_APPROVE" != "true" ]]; then
     read -rp "Scale fleet to 0 (terminates instance, EBS data preserved)? [y/N] " confirm
     if [[ "$confirm" != [yY] ]]; then
