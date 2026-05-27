@@ -152,7 +152,7 @@ variable "existing_key_name" {
 variable "openclaw_version" {
   description = "OpenClaw image version tag (ghcr.io/openclaw/openclaw:<tag>)"
   type        = string
-  default     = "latest"
+  default     = "2026.5.22-arm64"
 }
 
 variable "anthropic_api_key" {
