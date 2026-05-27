@@ -91,6 +91,23 @@ if [[ -n "$SPOT_FLEET_ID" ]]; then
   if [[ "$state" == "running" && "$ip" != "None" ]]; then
     echo "Public IP: $ip"
     echo "Launched:  $launch"
+
+    # Version info via SSH (non-blocking; skip if unreachable)
+    _ver=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes ubuntu@"$ip" \
+      "docker inspect --format '{{.Config.Image}}' \$(docker ps -q --filter name=openclaw 2>/dev/null) 2>/dev/null | grep -o '[^:]*$'" \
+      2>/dev/null || true)
+    _upd=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes ubuntu@"$ip" \
+      "cat /opt/openclaw-data/config/update-check.json 2>/dev/null" \
+      2>/dev/null || true)
+    [[ -n "$_ver" ]] && echo "Version:   $_ver"
+    if [[ -n "$_upd" ]]; then
+      _latest=$(echo "$_upd" | grep -o '"available"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"[^"]*"$' | tr -d '"' || true)
+      [[ -z "$_latest" ]] && _latest=$(echo "$_upd" | grep -o '"latest"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"[^"]*"$' | tr -d '"' || true)
+      if [[ -n "$_latest" && "$_latest" != "$_ver" ]]; then
+        echo "⚠  Update: $_latest available — run ./stop.sh && ./start.sh"
+      fi
+    fi
+
     echo ""
     echo "SSH:         ssh ubuntu@$ip"
     echo "SSH tunnel:  ssh -fN -L 18789:localhost:18789 ubuntu@$ip"

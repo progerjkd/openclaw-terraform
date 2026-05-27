@@ -92,6 +92,19 @@ if [[ -n "$SPOT_FLEET_ID" ]]; then
       --query 'Reservations[0].Instances[0].PublicIpAddress' \
       --output text)
     echo "Public IP:   $ip"
+
+    # Show version once bootstrap is ready (instance may still be initialising; skip if not yet up)
+    echo "Waiting for OpenClaw to start (up to 2 min)..."
+    _ver=""
+    for _i in $(seq 1 24); do
+      _ver=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes ubuntu@"$ip" \
+        "docker inspect --format '{{.Config.Image}}' \$(docker ps -q --filter name=openclaw 2>/dev/null) 2>/dev/null | grep -o '[^:]*$'" \
+        2>/dev/null || true)
+      [[ -n "$_ver" ]] && break
+      sleep 5
+    done
+    [[ -n "$_ver" ]] && echo "Version:     $_ver" || echo "Version:     (still starting — run ./status.sh to check)"
+
     echo ""
     echo "SSH tunnel:  ssh -fN -L 18789:localhost:18789 ubuntu@$ip"
     echo "Control UI:  http://localhost:18789/"
