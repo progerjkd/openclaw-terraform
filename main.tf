@@ -343,19 +343,18 @@ resource "aws_launch_template" "openclaw" {
   }
 }
 
-# EC2 Spot Fleet with multiple instance types (priority: t4g.micro → t4g.small → t4g.medium)
+# EC2 Spot Fleet — t4g.micro only (1 GB RAM; relies on 2 GB swap created at bootstrap)
 resource "aws_spot_fleet_request" "openclaw" {
   count = var.use_spot_instances ? 1 : 0
 
   iam_fleet_role                      = aws_iam_role.spot_fleet_role[0].arn
   target_capacity                     = var.fleet_target_capacity
-  allocation_strategy                 = "capacityOptimizedPrioritized"
+  allocation_strategy                 = "capacityOptimized"
   instance_interruption_behaviour     = "terminate" # Data lives on the separate EBS volume; terminate avoids accumulating stopped instances
   wait_for_fulfillment                = true
   terminate_instances_with_expiration = false
   replace_unhealthy_instances         = false # Prevents fleet from relaunching when we intentionally scale to 0
 
-  # t4g.micro - Priority 0 (highest priority, cheapest; 1 GB RAM — relies on swap)
   launch_template_config {
     launch_template_specification {
       id      = aws_launch_template.openclaw.id
@@ -364,39 +363,6 @@ resource "aws_spot_fleet_request" "openclaw" {
 
     overrides {
       instance_type     = "t4g.micro"
-      priority          = 0
-      spot_price        = var.spot_max_price
-      subnet_id         = var.use_existing_vpc ? var.existing_subnet_id : aws_subnet.openclaw_subnet[0].id
-      weighted_capacity = 1
-    }
-  }
-
-  # t4g.small - Priority 1
-  launch_template_config {
-    launch_template_specification {
-      id      = aws_launch_template.openclaw.id
-      version = "$Latest"
-    }
-
-    overrides {
-      instance_type     = "t4g.small"
-      priority          = 1
-      spot_price        = var.spot_max_price
-      subnet_id         = var.use_existing_vpc ? var.existing_subnet_id : aws_subnet.openclaw_subnet[0].id
-      weighted_capacity = 1
-    }
-  }
-
-  # t4g.medium - Priority 2 (fallback)
-  launch_template_config {
-    launch_template_specification {
-      id      = aws_launch_template.openclaw.id
-      version = "$Latest"
-    }
-
-    overrides {
-      instance_type     = "t4g.medium"
-      priority          = 2
       spot_price        = var.spot_max_price
       subnet_id         = var.use_existing_vpc ? var.existing_subnet_id : aws_subnet.openclaw_subnet[0].id
       weighted_capacity = 1
