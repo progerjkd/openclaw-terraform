@@ -99,12 +99,15 @@ if [[ -n "$SPOT_FLEET_ID" ]]; then
     _upd=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes ubuntu@"$ip" \
       "cat /opt/openclaw-data/config/update-check.json 2>/dev/null" \
       2>/dev/null || true)
-    [[ -n "$_ver" ]] && echo "Version:   $_ver"
-    if [[ -n "$_upd" ]]; then
-      _latest=$(echo "$_upd" | grep -o '"available"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"[^"]*"$' | tr -d '"' || true)
-      [[ -z "$_latest" ]] && _latest=$(echo "$_upd" | grep -o '"latest"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"[^"]*"$' | tr -d '"' || true)
-      if [[ -n "$_latest" && "$_latest" != "$_ver" ]]; then
-        echo "⚠  Update: $_latest available — run ./stop.sh && ./start.sh"
+    if [[ -n "$_ver" ]]; then
+      echo "Running:   $_ver"
+      _latest=$(echo "$_upd" | grep -o '"lastAvailableVersion"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"[^"]*"$' | tr -d '"' || true)
+      if [[ -n "$_latest" ]]; then
+        if [[ "$_latest" == "${_ver%%-*}" ]]; then
+          echo "Latest:    $_latest  ✓ up to date"
+        else
+          echo "Latest:    $_latest  ⚠  run ./stop.sh && ./start.sh to update"
+        fi
       fi
     fi
 
