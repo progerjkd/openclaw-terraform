@@ -1,5 +1,5 @@
 # OpenClaw AWS Infrastructure
-# Deploys OpenClaw on AWS t4g.small (ARM64) with Docker
+# Deploys OpenClaw on AWS t4g.micro (ARM64) with Docker
 
 terraform {
   required_version = ">= 1.0"
@@ -343,7 +343,7 @@ resource "aws_launch_template" "openclaw" {
   }
 }
 
-# EC2 Spot Fleet — t4g.small only
+# EC2 Spot Fleet — t4g.micro only
 resource "aws_spot_fleet_request" "openclaw" {
   count = var.use_spot_instances ? 1 : 0
 
@@ -362,7 +362,7 @@ resource "aws_spot_fleet_request" "openclaw" {
     }
 
     overrides {
-      instance_type     = "t4g.small"
+      instance_type     = "t4g.micro"
       spot_price        = var.spot_max_price
       subnet_id         = var.use_existing_vpc ? var.existing_subnet_id : aws_subnet.openclaw_subnet[0].id
       weighted_capacity = 1

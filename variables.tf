@@ -36,7 +36,7 @@ variable "team_name" {
 variable "instance_type" {
   description = "EC2 instance type (ARM64) - used for on-demand fallback"
   type        = string
-  default     = "t4g.small"
+  default     = "t4g.micro"
 
   validation {
     condition     = can(regex("^t4g\\.", var.instance_type))
