@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repo Does
 
-Terraform configuration to deploy **OpenClaw** (an AI assistant gateway) on AWS. It provisions an ARM64 EC2 spot instance (t4g.small), a persistent 30 GB EBS data volume, VPC/networking, IAM roles, and CloudWatch logging. A set of shell scripts wraps the AWS CLI for day-to-day start/stop operations.
+Terraform configuration to deploy **OpenClaw** (an AI assistant gateway) on AWS. It provisions an ARM64 EC2 spot instance (t4g.micro), a persistent 30 GB EBS data volume, VPC/networking, IAM roles, and CloudWatch logging. A set of shell scripts wraps the AWS CLI for day-to-day start/stop operations.
 
 ## Common Commands
 
@@ -48,7 +48,7 @@ docker compose -f /opt/openclaw/docker-compose.yml logs -f openclaw-gateway
 Because spot instances terminate on stop/start, the data volume is **never** attached via Terraform for spot mode. Instead `attach-volume.sh` (and `user-data.sh` on boot) attach it via the AWS CLI.
 
 ### `user-data.sh` bootstrap flow (runs once on first boot, ~10–15 min)
-1. Create 2 GB swap (t4g.small has only 2 GB RAM)
+1. Create 2 GB swap (t4g.micro has only 2 GB RAM)
 2. Install Docker, AWS CLI, awscli, unattended-upgrades
 3. Self-attach the data EBS volume using IMDSv2 + the instance's IAM role
 4. Move Docker and containerd data roots to `/opt/openclaw-data` so the root volume isn't exhausted
