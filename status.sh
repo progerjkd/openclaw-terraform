@@ -106,7 +106,9 @@ if [[ -n "$SPOT_FLEET_ID" ]]; then
       _latest=$(echo "$_upd" | grep -o '"lastAvailableVersion"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"[^"]*"$' | tr -d '"' || true)
       echo "Running:   $_ver"
       if [[ -n "$_latest" ]]; then
-        if [[ "$_latest" == "$_ver" ]]; then
+        _ver_int=$(echo "$_ver" | awk -F. '{printf "%d%02d%02d", $1, $2, $3}')
+        _latest_int=$(echo "$_latest" | awk -F. '{printf "%d%02d%02d", $1, $2, $3}')
+        if (( _latest_int <= _ver_int )); then
           echo "Latest:    $_latest  ✓ up to date"
         else
           echo "Latest:    $_latest  ⚠  run ./stop.sh && ./start.sh to update"
